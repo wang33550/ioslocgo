@@ -1,0 +1,49 @@
+# CI 用依赖清单。
+#
+# pymobiledevice3 的 lzfse 与 pyimg4 需要 C 编译器，且仅用于固件镜像解析，
+# 与本项目无关。CI 中以 --no-deps 安装主包，再由本文件补齐实际用到的
+# 纯 Python 依赖。
+#
+# 同样的做法适用于缺少编译环境的 Windows 开发机。
+
+construct
+construct-typing
+asn1
+coloredlogs
+bpylist2
+hexdump
+daemonize
+gpxpy!=1.6.0,<1.7.0
+pykdebugparser
+pyusb
+tqdm
+requests
+parameter_decorators
+packaging
+typing_extensions
+pygnuutils
+cryptography
+pycrashreport
+fastapi
+uvicorn
+wsproto
+Pillow
+questionary
+ifaddr
+hyperframe
+srptools
+qh3<2
+developer_disk_image
+opack2
+psutil
+pytun-pmd3
+prompt_toolkit
+python-pcapng
+plumbum
+typer>=0.25
+typer-injector
+defusedxml
+pmd-pytcp
+xonsh
+IPython
+pygments

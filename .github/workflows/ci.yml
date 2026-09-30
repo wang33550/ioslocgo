@@ -21,21 +21,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # lzfse 与 pyimg4 需要 C 编译器，且仅用于固件镜像解析，与本项目无关。
-      # 先装主包（跳过依赖），再补齐实际用到的那些纯 Python 依赖。
+      # 依赖清单见 requirements-ci.txt，其中说明了为何跳过 lzfse 与 pyimg4。
+      # 不使用行连接符，Windows runner 默认 shell 为 PowerShell，语法不兼容。
       - name: Install
         run: |
           python -m pip install -U pip
           python -m pip install --no-deps pymobiledevice3 ipsw_parser
+          python -m pip install -r requirements-ci.txt
           python -m pip install -e . --no-deps
           python -m pip install pytest ruff
-          python -m pip install construct construct-typing asn1 coloredlogs \
-            bpylist2 hexdump daemonize "gpxpy!=1.6.0,<1.7.0" pykdebugparser \
-            pyusb tqdm requests parameter_decorators packaging typing_extensions \
-            pygnuutils cryptography pycrashreport fastapi uvicorn wsproto Pillow \
-            questionary ifaddr hyperframe srptools "qh3<2" developer_disk_image \
-            opack2 psutil pytun-pmd3 prompt_toolkit python-pcapng plumbum \
-            "typer>=0.25" typer-injector defusedxml pmd-pytcp xonsh IPython pygments
 
       - name: Lint
         run: ruff check ioslocgo tests
