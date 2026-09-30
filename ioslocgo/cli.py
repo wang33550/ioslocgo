@@ -13,7 +13,7 @@ from . import __version__
 from .coords import SUPPORTED_SYSTEMS, haversine_meters, to_wgs84
 from .location import clear_location, hold_location, play_gpx
 from .preflight import Status, run_all_checks
-from .tunnel import RsdAddress, TunnelError, elevate_hint, is_admin, parse_tunnel_output
+from .tunnel import RsdAddress, TunnelError, elevate_hint, parse_tunnel_output
 
 _MARKS = {Status.OK: "[  OK  ]", Status.FAIL: "[ 失败 ]", Status.SKIP: "[ 跳过 ]"}
 
@@ -31,26 +31,27 @@ def _print_checks(results: list) -> bool:
     return all(r.ok for r in results)
 
 
-def _resolve_rsd(args: argparse.Namespace) -> RsdAddress:
-    """从命令行参数得到 RSD 地址，必要时给出提权指引。"""
-    if args.rsd:
-        # 同时接受 "地址 端口" 与 "地址,端口" 两种写法
-        raw = args.rsd.replace(",", " ").split()
-        if len(raw) == 2:
-            return RsdAddress(raw[0], int(raw[1]))
-        parsed = parse_tunnel_output(args.rsd)
-        if parsed:
-            return parsed
-        raise SystemExit(
-            f"无法解析 --rsd {args.rsd!r}。\n"
-            '正确写法："地址 端口"，例如：--rsd "fd13:d8fb:3cd1::1 61051"'
-        )
+def _resolve_rsd(args: argparse.Namespace) -> RsdAddress | None:
+    """解析 --rsd 参数。
 
-    print("未提供 --rsd，需要先建立隧道。\n")
-    print(elevate_hint())
-    if is_admin():
-        print("\n当前进程已有管理员权限，可直接在本终端另开一个窗口执行上述命令。")
-    raise SystemExit(2)
+    返回 None 表示走默认的用户态隧道：在本进程内建立，无需管理员权限，
+    用户也不必手动复制 RSD 地址。
+    """
+    if not args.rsd:
+        return None
+
+    # 同时接受 "地址 端口" 与 "地址,端口" 两种写法
+    raw = args.rsd.replace(",", " ").split()
+    if len(raw) == 2:
+        return RsdAddress(raw[0], int(raw[1]))
+    parsed = parse_tunnel_output(args.rsd)
+    if parsed:
+        return parsed
+    raise SystemExit(
+        f"无法解析 --rsd {args.rsd!r}。\n"
+        '正确写法："地址 端口"，例如：--rsd "fd13:d8fb:3cd1::1 61051"\n'
+        "提示：通常无需该参数，省略即在本进程内建立免提权隧道。"
+    )
 
 
 def _convert(args: argparse.Namespace) -> tuple[float, float]:
@@ -201,7 +202,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument(
             "--rsd",
             metavar='"地址 端口"',
-            help="隧道的 RSD 地址与端口，例如 --rsd \"fd13:d8fb:3cd1::1 61051\"",
+            help="连接到已有的提权隧道。通常无需指定，默认在进程内建立免提权隧道；"
+            "设备系统低于 iOS 17.4 时才需要此参数",
         )
 
     p = sub.add_parser("doctor", help="环境自检")

@@ -13,14 +13,23 @@ import contextlib
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from .tunnel import RsdAddress, TunnelError
+from .tunnel import RsdAddress, TunnelError, userspace_rsd
 
 __all__ = ["hold_location", "play_gpx", "clear_location", "set_location_once"]
 
 
 @contextlib.asynccontextmanager
-async def _rsd_session(rsd: RsdAddress) -> AsyncIterator[object]:
-    """连接到隧道后的 RemoteServiceDiscovery 端点。"""
+async def _rsd_session(rsd: RsdAddress | None) -> AsyncIterator[object]:
+    """取得可用的 RemoteServiceDiscovery 端点。
+
+    rsd 为 None 时在本进程内建立用户态隧道（无需管理员权限）；给定地址时
+    连接到一条已存在的提权隧道。
+    """
+    if rsd is None:
+        async with userspace_rsd() as service:
+            yield service
+        return
+
     try:
         from pymobiledevice3.remote.remote_service_discovery import (
             RemoteServiceDiscoveryService,
@@ -45,7 +54,7 @@ async def _rsd_session(rsd: RsdAddress) -> AsyncIterator[object]:
 
 
 @contextlib.asynccontextmanager
-async def _location_service(rsd: RsdAddress) -> AsyncIterator[object]:
+async def _location_service(rsd: RsdAddress | None) -> AsyncIterator[object]:
     """打开 LocationSimulation 通道。退出时通道关闭，模拟定位随之失效。"""
     # pymobiledevice3 的部分依赖在 Windows 上需要 C 编译器，用 --no-deps
     # 安装时可能缺失。此处显式转成 TunnelError，避免抛出裸的导入错误。
@@ -74,7 +83,7 @@ async def _location_service(rsd: RsdAddress) -> AsyncIterator[object]:
 
 
 async def hold_location(
-    rsd: RsdAddress,
+    rsd: RsdAddress | None,
     latitude: float,
     longitude: float,
     stop: asyncio.Event | None = None,
@@ -98,7 +107,7 @@ async def hold_location(
 
 
 async def set_location_once(
-    rsd: RsdAddress, latitude: float, longitude: float
+    rsd: RsdAddress | None, latitude: float, longitude: float
 ) -> None:
     """下发坐标后立即关闭通道。
 
@@ -109,14 +118,14 @@ async def set_location_once(
         await sim.set(latitude, longitude)
 
 
-async def clear_location(rsd: RsdAddress) -> None:
+async def clear_location(rsd: RsdAddress | None) -> None:
     """清除模拟定位，让设备恢复真实位置。"""
     async with _location_service(rsd) as sim:
         await sim.clear()
 
 
 async def play_gpx(
-    rsd: RsdAddress,
+    rsd: RsdAddress | None,
     path: Path,
     randomness: int = 0,
     disable_sleep: bool = False,

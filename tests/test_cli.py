@@ -74,8 +74,13 @@ class TestRsdParsing:
             main(["clear", "--rsd", "garbage"])
         assert "无法解析" in str(exc.value)
 
-    def test_missing_rsd_gives_guidance(self, capsys: pytest.CaptureFixture) -> None:
+    def test_missing_rsd_is_allowed(self) -> None:
+        """省略 --rsd 表示走进程内的免提权隧道，不应报参数错误。"""
+        args = build_parser().parse_args(["clear"])
+        assert args.rsd is None
+
+    def test_garbage_mentions_optional(self) -> None:
+        """解析失败时应提示该参数通常可省略。"""
         with pytest.raises(SystemExit) as exc:
-            main(["clear"])
-        assert exc.value.code == 2
-        assert "start-tunnel" in capsys.readouterr().out
+            main(["clear", "--rsd", "garbage"])
+        assert "省略" in str(exc.value)

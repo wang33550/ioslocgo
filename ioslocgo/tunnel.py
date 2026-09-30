@@ -10,13 +10,22 @@ iOS 17 起，开发者服务（含模拟定位）不再直接挂在 lockdown 上
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import re
 import subprocess
 import sys
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-__all__ = ["RsdAddress", "TunnelError", "is_admin", "elevate_hint", "parse_tunnel_output"]
+__all__ = [
+    "RsdAddress",
+    "TunnelError",
+    "elevate_hint",
+    "is_admin",
+    "parse_tunnel_output",
+    "userspace_rsd",
+]
 
 # start-tunnel 输出中 RSD 地址与端口所在行
 _RSD_RE = re.compile(
@@ -99,6 +108,46 @@ def elevate_hint() -> str:
         "  方式二，手动操作：开始菜单搜索 PowerShell，右键「以管理员身份运行」，然后执行：\n"
         f"    {cmd}\n\n" + _TUNNEL_CAVEAT
     )
+
+
+@contextlib.asynccontextmanager
+async def userspace_rsd(serial: str | None = None) -> AsyncIterator[object]:
+    """在本进程内建立用户态隧道，返回已连接的 RSD 端点。
+
+    使用纯 Python 的 PyTCP 协议栈，不创建系统级虚拟网卡，因此**无需管理员
+    权限**。这是首选路径：用户不必手动开提权终端，也不必复制粘贴 RSD 地址。
+
+    代价是主机到设备方向的传输较慢（发送分段被刻意压小以保证可靠性），
+    但模拟定位只下发几十字节的坐标，完全不受影响。
+
+    要求 iOS 17.4 以上（需要 CoreDeviceProxy）。更早的版本请退回到手动
+    建立提权隧道，再通过 --rsd 传入。
+    """
+    try:
+        from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
+    except ImportError as exc:
+        raise TunnelError(
+            f"无法导入用户态隧道模块：{exc}\n"
+            "请确认 pymobiledevice3 版本不低于 11.19，且已安装 pmd-pytcp。"
+        ) from exc
+
+    tunnel = UserspaceRsdTunnel(serial=serial)
+    try:
+        rsd = await tunnel.aopen()
+    except Exception as exc:
+        raise TunnelError(
+            f"建立用户态隧道失败：{exc}\n\n"
+            "可能原因与对策：\n"
+            "  - 设备系统低于 iOS 17.4：改用手动提权隧道，见 ioslocgo doctor 的提示。\n"
+            "  - 设备已锁屏或未信任本机：解锁并重新插拔数据线。\n"
+            "  - 开发者模式未开启：执行 ioslocgo doctor 查看。"
+        ) from exc
+
+    try:
+        yield rsd
+    finally:
+        with contextlib.suppress(Exception):
+            await tunnel.aclose()
 
 
 def probe(rsd: RsdAddress, timeout: int = 30) -> bool:

@@ -19,7 +19,7 @@ iOS 模拟定位命令行工具，通过 Apple 官方调试通道（DVT）下发
 - **必须连着数据线**。隧道断开（拔线、关闭终端、设备重启）后定位立即恢复真实位置。
 - **必须开启开发者模式**。iOS 16 起的强制要求。
 - **iOS 端做不出独立 App**。沙盒内既访问不到 usbmuxd，也无权修改系统定位状态。App Store 上声称能改定位的应用，实际都改不了系统级定位。
-- **建立隧道需要管理员权限**。隧道要创建虚拟网络接口。
+- **iOS 17.4 以下需要管理员权限**。更高版本可用免提权的用户态隧道，本工具默认走这条路径。
 
 ## 安装
 
@@ -61,33 +61,10 @@ ioslocgo doctor
 
 任何一项失败都会附带具体修复步骤。
 
-### 第二步，建立隧道
-
-隧道需要管理员权限，且必须在独立终端中保持运行。Windows 下在 PowerShell 执行：
-
-```powershell
-Start-Process powershell -Verb RunAs -ArgumentList '-NoExit','-Command','python -m pymobiledevice3 lockdown start-tunnel'
-```
-
-macOS / Linux：
+### 第二步，下发坐标
 
 ```bash
-sudo python -m pymobiledevice3 lockdown start-tunnel
-```
-
-新窗口中会输出：
-
-```
-RSD Address: fd13:d8fb:3cd1::1
-RSD Port: 61051
-```
-
-**这个窗口不要关闭。**
-
-### 第三步，下发坐标
-
-```bash
-ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "fd13:d8fb:3cd1::1 61051"
+ioslocgo set 30.36165 119.973495 --source gcj02
 ```
 
 ```
@@ -96,6 +73,9 @@ ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "fd13:d8fb:3cd1::1 61051"
 已下发模拟定位：30.364185, 119.968880
 按 Ctrl+C 停止。保持本进程运行，退出后设备将恢复真实定位。
 ```
+
+隧道在进程内自动建立，**无需管理员权限**，也不必手动复制 RSD 地址。工具使用
+pymobiledevice3 的纯 Python 用户态网络栈，不创建系统级虚拟网卡。
 
 `--source` 的取值：
 
@@ -107,6 +87,27 @@ ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "fd13:d8fb:3cd1::1 61051"
 
 不确定来源时，先用 `gcj02` 下发，在手机地图上看落点。若位置偏向东北方数百米，说明来源其实是 WGS-84，改用 `--source wgs84`。
 
+### iOS 17.0 - 17.3 或自动隧道失败时
+
+这些版本缺少 CoreDeviceProxy，无法使用用户态隧道，需要手动建立提权隧道。
+Windows 下在 PowerShell 执行：
+
+```powershell
+Start-Process powershell -Verb RunAs -ArgumentList '-NoExit','-Command','python -m pymobiledevice3 lockdown start-tunnel'
+```
+
+macOS / Linux：
+
+```bash
+sudo python -m pymobiledevice3 lockdown start-tunnel
+```
+
+窗口中会输出 `RSD Address` 与 `RSD Port`，**保持该窗口不要关闭**，然后：
+
+```bash
+ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "fd13:d8fb:3cd1::1 61051"
+```
+
 ### 其他命令
 
 ```bash
@@ -114,10 +115,10 @@ ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "fd13:d8fb:3cd1::1 61051"
 ioslocgo convert 30.36165 119.973495 --source gcj02
 
 # 按 GPX 轨迹连续移动
-ioslocgo play route.gpx --rsd "fd13:d8fb:3cd1::1 61051"
+ioslocgo play route.gpx
 
 # 清除模拟定位
-ioslocgo clear --rsd "fd13:d8fb:3cd1::1 61051"
+ioslocgo clear
 
 # 尝试启用开发者模式
 ioslocgo enable-devmode
@@ -137,7 +138,7 @@ ioslocgo enable-devmode
 
 **定位没变，或者变了又立刻回去了**
 
-隧道或本进程退出了。两者都必须保持运行。检查隧道窗口是否还在，以及 `ioslocgo set` 是否仍在前台。
+`ioslocgo set` 进程退出了。该进程必须保持在前台运行，坐标才持续生效。
 
 **位置偏了几百米**
 
