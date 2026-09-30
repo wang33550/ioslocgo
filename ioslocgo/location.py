@@ -47,10 +47,18 @@ async def _rsd_session(rsd: RsdAddress) -> AsyncIterator[object]:
 @contextlib.asynccontextmanager
 async def _location_service(rsd: RsdAddress) -> AsyncIterator[object]:
     """打开 LocationSimulation 通道。退出时通道关闭，模拟定位随之失效。"""
-    from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
-    from pymobiledevice3.services.dvt.instruments.location_simulation import (
-        LocationSimulation,
-    )
+    # pymobiledevice3 的部分依赖在 Windows 上需要 C 编译器，用 --no-deps
+    # 安装时可能缺失。此处显式转成 TunnelError，避免抛出裸的导入错误。
+    try:
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+        from pymobiledevice3.services.dvt.instruments.location_simulation import (
+            LocationSimulation,
+        )
+    except ImportError as exc:
+        raise TunnelError(
+            f"pymobiledevice3 依赖缺失：{exc.name}\n"
+            f"请执行：pip install {exc.name}"
+        ) from exc
 
     async with _rsd_session(rsd) as service:
         try:

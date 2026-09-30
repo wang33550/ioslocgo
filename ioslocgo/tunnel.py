@@ -73,11 +73,21 @@ def tunnel_command() -> list[str]:
     return [sys.executable, "-m", "pymobiledevice3", "lockdown", "start-tunnel"]
 
 
+#: 所有平台的指引都必须包含这段说明，隧道断开会静默失效，是最易踩的点
+_TUNNEL_CAVEAT = (
+    "窗口中出现 RSD Address 与 RSD Port 两行后，把它们通过 --rsd 传给本工具。\n"
+    "隧道一旦断开，模拟定位立即失效，设备会恢复真实位置。"
+)
+
+
 def elevate_hint() -> str:
     """生成提权启动隧道的操作指引。"""
     cmd = " ".join(tunnel_command())
     if sys.platform != "win32":
-        return f"请在另一个终端中执行并保持窗口不关闭：\n  sudo {cmd}"
+        return (
+            "建立隧道需要 root 权限。请在另一个终端中执行，并保持窗口不要关闭：\n\n"
+            f"    sudo {cmd}\n\n" + _TUNNEL_CAVEAT
+        )
     ps = (
         "Start-Process powershell -Verb RunAs -ArgumentList "
         f"'-NoExit','-Command','{cmd}'"
@@ -87,9 +97,7 @@ def elevate_hint() -> str:
         "  方式一，在当前 PowerShell 里执行（会弹出 UAC 授权框）：\n"
         f"    {ps}\n\n"
         "  方式二，手动操作：开始菜单搜索 PowerShell，右键「以管理员身份运行」，然后执行：\n"
-        f"    {cmd}\n\n"
-        "窗口中出现 RSD Address 与 RSD Port 两行后，把它们通过 --rsd 传给本工具。\n"
-        "隧道一旦断开，模拟定位立即失效，设备会恢复真实位置。"
+        f"    {cmd}\n\n" + _TUNNEL_CAVEAT
     )
 
 

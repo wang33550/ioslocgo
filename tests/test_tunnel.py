@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from ioslocgo import tunnel as tunnel_module
 from ioslocgo.tunnel import RsdAddress, elevate_hint, parse_tunnel_output
 
 # 一次真实的 start-tunnel 输出，取自 iPhone 15 / iOS 27.0
@@ -51,8 +54,29 @@ class TestRsdAddress:
 
 
 class TestElevateHint:
-    def test_mentions_admin_requirement(self) -> None:
+    """提权指引在所有平台上都必须完整。
+
+    首个版本曾在非 Windows 分支漏掉「隧道断开即失效」的说明，
+    用户会以为定位设置失败。以下测试固定住这一要求。
+    """
+
+    def test_mentions_command(self) -> None:
+        assert "start-tunnel" in elevate_hint()
+
+    def test_warns_about_disconnect(self) -> None:
+        assert "断开" in elevate_hint()
+
+    def test_explains_rsd_next_step(self) -> None:
+        assert "--rsd" in elevate_hint()
+
+    @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+    def test_complete_on_every_platform(
+        self, platform: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(tunnel_module.sys, "platform", platform)
         text = elevate_hint()
         assert "start-tunnel" in text
-        # 必须说明隧道断开的后果，这是最容易被忽略的点
         assert "断开" in text
+        assert "--rsd" in text
+        # 必须指出需要提权，否则用户会直接在普通终端里执行
+        assert "权限" in text
