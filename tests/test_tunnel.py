@@ -7,7 +7,8 @@ import pytest
 from ioslocgo import tunnel as tunnel_module
 from ioslocgo.tunnel import RsdAddress, elevate_hint, parse_tunnel_output
 
-# 一次真实的 start-tunnel 输出，取自 iPhone 15 / iOS 27.0
+# 一次 start-tunnel 输出的真实格式，UDID 已替换为占位值。
+# 解析只关心 RSD 两行，其余字段仅用于验证不会被误匹配。
 REAL_OUTPUT = """\
 2026-09-30 00:38:03 HOST pymobiledevice3.cli.remote[25640] INFO tunnel created
 Identifier: 00001111-000A1111A1A11A1E

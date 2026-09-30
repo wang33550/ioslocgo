@@ -1,19 +1,23 @@
 """RSD 隧道管理。
 
 iOS 17 起，开发者服务（含模拟定位）不再直接挂在 lockdown 上，而是位于
-一条 RemoteXPC 隧道之后。该隧道需要创建虚拟网络接口，在 Windows 上必须
-由管理员权限的进程建立，因此无法在普通权限的主程序内直接开启。
+一条 RemoteXPC 隧道之后。建立该隧道有两条路径：
 
-本模块负责：判断当前是否具备管理员权限；在有权限时于本进程内开启隧道；
-否则生成一条可供用户在管理员终端里执行的命令。
+- **用户态隧道**（``userspace_rsd``，默认）。用纯 Python 的 PyTCP 协议栈
+  在本进程内建立，不创建系统级虚拟网卡，因此无需管理员权限。要求设备
+  系统 iOS 17.4 以上。
+- **提权隧道**。由 ``pymobiledevice3 lockdown start-tunnel`` 创建系统级
+  虚拟网络接口，需要管理员 / root 权限，并在独立终端中常驻。iOS 17.0
+  至 17.3 缺少 CoreDeviceProxy，只能走这条路。
+
+因此本模块既提供前者的上下文管理器，也提供后者的操作指引
+（``elevate_hint``）与输出解析（``parse_tunnel_output``）。
 """
 
 from __future__ import annotations
 
 import contextlib
-import ctypes
 import re
-import subprocess
 import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -22,7 +26,6 @@ __all__ = [
     "RsdAddress",
     "TunnelError",
     "elevate_hint",
-    "is_admin",
     "parse_tunnel_output",
     "userspace_rsd",
 ]
@@ -47,23 +50,15 @@ class RsdAddress:
 
     @property
     def cli_args(self) -> list[str]:
-        """转成 pymobiledevice3 命令行所需的 --rsd 参数。"""
+        """转成 pymobiledevice3 命令行所需的 --rsd 参数。
+
+        本项目直接调用 Python API，不经由子进程。此属性供调用方在需要
+        拼接 pymobiledevice3 命令行时使用。
+        """
         return ["--rsd", self.address, str(self.port)]
 
     def __str__(self) -> str:
         return f"{self.address} {self.port}"
-
-
-def is_admin() -> bool:
-    """当前进程是否具备管理员 / root 权限。"""
-    if sys.platform != "win32":
-        import os
-
-        return os.geteuid() == 0  # type: ignore[attr-defined]
-    try:
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
-        return False
 
 
 def parse_tunnel_output(text: str) -> RsdAddress | None:
@@ -150,29 +145,3 @@ async def userspace_rsd(serial: str | None = None) -> AsyncIterator[object]:
             await tunnel.aclose()
 
 
-def probe(rsd: RsdAddress, timeout: int = 30) -> bool:
-    """探测隧道是否可用。
-
-    通过一次轻量的 device-information 调用验证 RSD 端点可达。
-    """
-    cmd = [
-        sys.executable,
-        "-m",
-        "pymobiledevice3",
-        "developer",
-        "dvt",
-        "device-information",
-        *rsd.cli_args,
-    ]
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-    return proc.returncode == 0

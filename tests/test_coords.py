@@ -39,6 +39,17 @@ class TestRoundTrip:
         back = _wgs84_to_gcj02(*wgs)
         assert haversine_meters(lat, lng, *back) < 0.01
 
+    def test_roundtrip_across_national_grid(self) -> None:
+        """在覆盖全国的网格上验证迭代收敛，支撑模块文档中的精度声明。"""
+        worst = 0.0
+        for lat_half in range(8, 107, 3):
+            for lng in range(74, 136, 3):
+                lat = lat_half / 2
+                wgs = gcj02_to_wgs84(lat, float(lng))
+                back = _wgs84_to_gcj02(*wgs)
+                worst = max(worst, haversine_meters(lat, float(lng), *back))
+        assert worst < 0.01
+
 
 class TestOffsetMagnitude:
     """国内坐标的偏移量应落在合理区间。"""

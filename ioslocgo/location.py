@@ -91,8 +91,9 @@ async def hold_location(
     """下发坐标并保持生效，直到 stop 被置位或协程被取消。
 
     Args:
-        rsd: 隧道连接参数。
-        latitude: 纬度，必须已是 WGS-84。
+        rsd: 隧道连接参数。为 None 时在本进程内建立免提权的用户态隧道，
+            这是默认路径；给定地址则连接到一条已存在的提权隧道。
+        latitude: 纬度，必须已是 WGS-84。坐标系转换由 coords 模块负责。
         longitude: 经度，必须已是 WGS-84。
         stop: 外部停止信号。为 None 时一直保持，由取消操作结束。
 
@@ -111,15 +112,19 @@ async def set_location_once(
 ) -> None:
     """下发坐标后立即关闭通道。
 
-    仅用于连通性验证。由于通道关闭，定位不会持续生效，正常使用请用
-    hold_location。
+    仅用于连通性验证：通道关闭后定位不再生效，正常使用请用
+    :func:`hold_location`。
     """
     async with _location_service(rsd) as sim:
         await sim.set(latitude, longitude)
 
 
 async def clear_location(rsd: RsdAddress | None) -> None:
-    """清除模拟定位，让设备恢复真实位置。"""
+    """清除模拟定位，让设备恢复真实位置。
+
+    正常退出 :func:`hold_location` 已足以恢复真实定位，此函数用于清理
+    异常退出（例如进程被强杀）后可能残留的模拟状态。
+    """
     async with _location_service(rsd) as sim:
         await sim.clear()
 
@@ -134,8 +139,9 @@ async def play_gpx(
     """按 GPX 轨迹连续移动，用于模拟行进路线。
 
     Args:
-        rsd: 隧道连接参数。
-        path: GPX 文件路径。其中坐标应为 WGS-84，GPX 标准本身即要求如此。
+        rsd: 隧道连接参数，语义同 :func:`hold_location`。
+        path: GPX 文件路径。其中坐标应为 WGS-84，GPX 标准本身即要求如此，
+            因此不对其做坐标系转换。
         randomness: 时间抖动范围（秒），0 表示严格按轨迹时间。
         disable_sleep: 为真时忽略轨迹点之间的间隔，尽快播完。
         stop: 外部停止信号。

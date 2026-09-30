@@ -99,13 +99,16 @@ async def _run_until_interrupt(coro_factory, label: str) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    ok = _print_checks(run_all_checks())
-    if ok:
-        print("全部通过。下一步建立隧道：\n")
-        print(elevate_hint())
-        return 0
-    print("请按上方指引修复后重试。")
-    return 1
+    if not _print_checks(run_all_checks()):
+        print("请按上方指引修复后重试。")
+        return 1
+
+    print("全部通过，可直接下发坐标：")
+    print("  ioslocgo set 30.36165 119.973495 --source gcj02")
+    print("\n隧道会在进程内自动建立，无需管理员权限。")
+    print("若设备系统低于 iOS 17.4，用户态隧道不可用，需手动建立提权隧道：\n")
+    print(elevate_hint())
+    return 0
 
 
 def cmd_set(args: argparse.Namespace) -> int:
@@ -190,9 +193,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "典型流程：\n"
-            "  1. ioslocgo doctor                      检查环境\n"
-            "  2. 按提示在管理员终端建立隧道，记下 RSD 地址与端口\n"
-            '  3. ioslocgo set 30.36165 119.973495 --source gcj02 --rsd "地址 端口"\n'
+            "  1. ioslocgo doctor                             检查环境\n"
+            "  2. ioslocgo set 30.36165 119.973495 --source gcj02\n"
+            "\n隧道在进程内自动建立，无需管理员权限（要求 iOS 17.4 以上）。\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"ioslocgo {__version__}")
